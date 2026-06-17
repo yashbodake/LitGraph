@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Secrets — never commit
+.env
+
+# Generated data outputs (directory structure kept via .gitkeep)
+data/raw/*.json
+data/chunks/*.jsonl
+data/chunks/*.png
+data/qa/
+data/eval/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
