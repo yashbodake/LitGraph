@@ -16,7 +16,7 @@
 |---|---|---|---|---|
 | 1 — Semantic Chunking | 🟡 In Progress | 2026-06-17 | — | Code + smoke test done; full 5000 run pending |
 | 2 — Knowledge Graph | 🟡 In Progress | 2026-06-17 | — | `graph_builder.py` written + logic-tested; pending Neo4j run |
-| 3 — Retrieval & Generation | 🔴 Not Started | — | — | — |
+| 3 — Retrieval & Generation | 🟡 In Progress | 2026-06-17 | — | `rag_pipeline.py` written + logic-tested; pending Neo4j+LLM run |
 | 4 — Evaluation | 🔴 Not Started | — | — | — |
 | 5 — Demo & Optimisation | 🔴 Not Started | — | — | — |
 
@@ -121,25 +121,25 @@ Plugins:  APOC ❌   GDS ❌
 
 ## Phase 3 — Retrieval & Generation
 
-**Status:** 🔴 Not Started
+**Status:** 🟡 In Progress
 
 ### Tasks
 
-- [ ] Implement `_vector_search()` using Neo4j vector index
-- [ ] Implement `_graph_expand()` using Chunk → Entity → Chunk traversal
-- [ ] Implement `_rerank()` with combined score (α·vector + (1-α)·graph_proximity)
-- [ ] Build `GraphRAGPipeline.retrieve()` orchestrating the above
-- [ ] Connect LLM — OpenAI API or Ollama
-- [ ] Implement `GraphRAGPipeline.generate()` with prompt template
-- [ ] Manually test on 10 PubMed QA questions
-- [ ] Save comparison table to `data/qa/manual_test_10.md`
+- [x] Implement `_vector_search()` using Neo4j vector index
+- [x] Implement `_graph_expand()` using Chunk → Entity → Chunk traversal
+- [x] Implement `_rerank()` with combined score (α·vector + (1-α)·graph_proximity)
+- [x] Build `GraphRAGPipeline.retrieve()` orchestrating the above
+- [x] Connect LLM — OpenAI API or Ollama
+- [x] Implement `GraphRAGPipeline.generate()` with prompt template
+- [ ] Manually test on 10 PubMed QA questions *(pending Neo4j + data + LLM)*
+- [ ] Save comparison table to `data/qa/manual_test_10.md` *(pending the 10-Q run)*
 
 ### LLM Config
 
 ```
-Provider:  OpenAI / Ollama (circle one)
-Model:     gpt-4o-mini / mistral / other: ___
-Endpoint:  (fill in if local)
+Provider:  auto (OpenAI if OPENAI_API_KEY set, else local Ollama)
+Model:     gpt-4o-mini (OpenAI) / mistral (Ollama)
+Endpoint:  LOCAL_LLM_URL (default http://localhost:11434/api/generate)
 ```
 
 ### Manual Test Results (10 Questions)
@@ -163,15 +163,22 @@ Endpoint:  (fill in if local)
 
 ### Decisions Made
 
-_None yet._
+- `_graph_expand` uses the spec's **plain-Cypher alternative** (not APOC `apoc.path.subgraphNodes`) run at two hop levels, so each neighbour gets an exact proximity tier (depth-1 → 0.5, depth-2 → 0.25). APOC's subgraphNodes doesn't expose per-node level, which would make proximity scoring ambiguous.
+- `call_llm_with_retry(client, **kwargs)` matches the AGENT.md template (calls `client.chat.completions.create`, 3 retries, `2**attempt` backoff); a shared `_with_retry` helper backs it and the Ollama path. OpenAI client is built with `max_retries=0` so our backoff owns retries.
+- `get_llm_client()` auto-selects provider: OpenAI if `OPENAI_API_KEY` is set, else local Ollama — no code changes needed to switch.
+- Ollama `/api/generate` takes a single prompt, so `generate()` prepends the `SYSTEM_PROMPT` (OpenAI uses the proper `system` message role).
+- `retrieve()` truncates to the top 10 chunks after re-ranking (per spec) before building the LLM prompt.
 
 ### Blockers
 
-_None yet._
+- End-to-end run needs **Neo4j populated** (Phase 2) + **LLM access** (OpenAI key or `ollama pull mistral`) + **retrieval timing log** — none available in the build env.
+- The 10-question manual comparison (`data/qa/manual_test_10.md`) is pending a live run; needs the filtered `pubmed_qa` set from Phase 4 prep too.
 
 ### Notes
 
-_None yet._
+- Pure-logic tests passed (no Neo4j/LLM needed): `_rerank` merge + `combined = 0.7·vec + 0.3·prox` formula + ordering + dedup; `_build_prompt` formatting; `_with_retry` retry-then-succeed and re-raise-after-max; `call_llm_with_retry` driving `chat.completions.create`; `generate()` extracting `.choices[0].message.content`; `get_llm_client` Ollama fallback.
+- `openai` 1.61.1 (v1 SDK) confirmed installed and matches the `from openai import OpenAI` pattern.
+- `__main__` runs 2 default questions (or args), printing retrieved chunks + answer; guards via logging.
 
 ---
 
@@ -282,6 +289,9 @@ _None yet._
 | 2026-06-17 | 2 | Chunk batch = 50/tx (not spec's 100) | AGENT.md is authoritative; embeddings are large |
 | 2026-06-17 | 2 | Embed corpus once, thread through ingest + edges | Avoids 2× embedding pass over ~11k chunks |
 | 2026-06-17 | 2 | `_find_similar_pairs` as pure function | Cosine-edge logic testable without a live Neo4j |
+| 2026-06-17 | 3 | Plain-Cypher (not APOC) graph expand at 2 levels | Gives exact proximity tiers (0.5 / 0.25) for re-ranking |
+| 2026-06-17 | 3 | `get_llm_client()` auto-selects OpenAI/Ollama | Switch provider via env, no code change |
+| 2026-06-17 | 3 | OpenAI client built with `max_retries=0` | Lets our `call_llm_with_retry` own backoff per AGENT.md |
 
 ---
 
@@ -328,3 +338,4 @@ BERTScore (baseline):        ____
 | — | Project spec created, AGENT.md and PROGRESS.md initialised |
 | 2026-06-17 | Phase 1: implemented `src/chunker.py` (3 strategies + singleton embedder + orchestrator + `__main__`) and `src/load_data.py`; smoke-tested all strategies + schema + `__main__` stats table. Full 5000-abstract run pending valid HF access. |
 | 2026-06-17 | Phase 2: implemented `src/graph_builder.py` (schema + ingest articles/chunks/entities + SEMANTIC_SIMILAR edges + `run_full_ingestion` + `__main__`), added `.env.example`; logic-tested cosine-edge + NER filter. End-to-end run pending Neo4j + SciSpaCy model + Phase 1 data. |
+| 2026-06-17 | Phase 3: implemented `src/rag_pipeline.py` (`GraphRAGPipeline`: retrieve/vector_search/graph_expand/rerank + generate/retry + run + `__main__`); logic-tested rerank/prompt/retry. Used 2 parallel research agents for conventions + current OpenAI/Neo4j/Ollama API docs. End-to-end run pending Neo4j + LLM. |
