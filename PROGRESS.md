@@ -17,7 +17,7 @@
 | 1 — Semantic Chunking | 🟡 In Progress | 2026-06-17 | — | Code + smoke test done; full 5000 run pending |
 | 2 — Knowledge Graph | 🟡 In Progress | 2026-06-17 | — | `graph_builder.py` written + logic-tested; pending Neo4j run |
 | 3 — Retrieval & Generation | 🟡 In Progress | 2026-06-17 | — | `rag_pipeline.py` written + logic-tested; pending Neo4j+LLM run |
-| 4 — Evaluation | 🔴 Not Started | — | — | — |
+| 4 — Evaluation | 🟡 In Progress | 2026-06-17 | — | `evaluator.py` written + metrics tested; pending real eval run |
 | 5 — Demo & Optimisation | 🔴 Not Started | — | — | — |
 
 **Status legend:** 🔴 Not Started · 🟡 In Progress · 🟢 Done · 🔵 Blocked
@@ -184,20 +184,20 @@ Endpoint:  LOCAL_LLM_URL (default http://localhost:11434/api/generate)
 
 ## Phase 4 — Evaluation
 
-**Status:** 🔴 Not Started
+**Status:** 🟡 In Progress
 
 ### Tasks
 
-- [ ] Filter `pubmed_qa / pqa_labeled` to matching abstract IDs
-- [ ] Sample 200 QA pairs for evaluation set (seed=42)
-- [ ] Implement `recall_at_k()` and `mrr()` in `evaluator.py`
-- [ ] Implement `compute_rouge_l()` in `evaluator.py`
-- [ ] Implement `compute_bert_score()` (batch) in `evaluator.py`
-- [ ] Run evaluation for `semantic_graph` variant (full system)
-- [ ] Run evaluation for `baseline` (fixed-token, no graph) variant
-- [ ] Save per-question CSVs to `data/eval/`
-- [ ] Build evaluation notebook `notebooks/03_evaluation_report.ipynb`
-- [ ] Include error analysis (10 worst questions)
+- [x] Filter `pubmed_qa / pqa_labeled` to matching abstract IDs *(in `prepare_eval_set`)*
+- [x] Sample 200 QA pairs for evaluation set (seed=42)
+- [x] Implement `recall_at_k()` and `mrr()` in `evaluator.py`
+- [x] Implement `compute_rouge_l()` in `evaluator.py`
+- [x] Implement `compute_bert_score()` (batch) in `evaluator.py`
+- [ ] Run evaluation for `semantic_graph` variant (full system) *(pending Neo4j+LLM+data)*
+- [ ] Run evaluation for `baseline` (fixed-token, no graph) variant *(pending)*
+- [x] Save per-question CSVs to `data/eval/` *(`run_full_evaluation` writes CSV)*
+- [ ] Build evaluation notebook `notebooks/03_evaluation_report.ipynb` *(needs real results first)*
+- [ ] Include error analysis (10 worst questions) *(needs real results)*
 
 ### Results (fill in after evaluation)
 
@@ -211,22 +211,29 @@ Endpoint:  LOCAL_LLM_URL (default http://localhost:11434/api/generate)
 ### QA Dataset Stats
 
 ```
-Total pubmed_qa (pqa_labeled):   ____
+Total pubmed_qa (pqa_labeled):   ____   # pending run (prepare_eval_set logs this)
 Matching abstract IDs:           ____
 Sampled for eval:                200
 ```
 
 ### Decisions Made
 
-_None yet._
+- Cached the `RougeScorer` once (module-level singleton) instead of rebuilding it per call — `compute_rouge_l` is called once per QA pair.
+- `run_full_evaluation` does **one** `retrieve()` per question (shared by retrieval + generation metrics) and runs BERTScore **once** as a batch over all answers (per-item F1 back-filled into the CSV rows) — avoids a 2× retrieval pass and N separate BERTScore calls.
+- `expand_graph` defaults to `True` only for the `semantic_graph` variant (inferred from `variant_name`), matching the variant table.
+- CSV written with stdlib `csv` (no pandas dependency for output); per-question columns exactly match the spec.
+- `evaluate_retrieval` / `evaluate_generation` also exposed standalone (each does its own loop) for targeted metric runs; `run_full_evaluation` is the efficient combined path.
+- `__main__` runs a 5-pair stub pipeline (`_StubPipeline`) so the full metric+CSV+table flow is exercised without Neo4j/LLM (AGENT.md smoke-test contract).
 
 ### Blockers
 
-_None yet._
+- Real evaluation run needs **Phase 2 Neo4j populated** + **Phase 3 pipeline + LLM** + the **filtered `pubmed_qa` set** (which needs the 5000 abstracts from Phase 1, blocked on HuggingFace access in this env). All metric code is written and tested with real `rouge_score`/`bert_score`.
 
 ### Notes
 
-_None yet._
+- Installed `rouge-score` 0.1.2 + `bert-score` 0.3.13 (pandas/torch/matplotlib already present).
+- Pure-logic tests passed: `recall_at_k` (incl. empty-gold edge case), `mrr` (incl. no-hit), `_summarise` averaging.
+- `__main__` stub demo ran end-to-end with **real** ROUGE-L + BERTScore: Recall@5/10=0.5, MRR=1.0, ROUGE-L≈0.24, BERTScore F1≈0.85; CSV columns match the spec exactly.
 
 ---
 
@@ -292,6 +299,8 @@ _None yet._
 | 2026-06-17 | 3 | Plain-Cypher (not APOC) graph expand at 2 levels | Gives exact proximity tiers (0.5 / 0.25) for re-ranking |
 | 2026-06-17 | 3 | `get_llm_client()` auto-selects OpenAI/Ollama | Switch provider via env, no code change |
 | 2026-06-17 | 3 | OpenAI client built with `max_retries=0` | Lets our `call_llm_with_retry` own backoff per AGENT.md |
+| 2026-06-17 | 4 | Single retrieve()/question + batch BERTScore in `run_full_evaluation` | Avoids 2× retrieval and N separate BERTScore calls |
+| 2026-06-17 | 4 | CSV via stdlib `csv` (no pandas) for output | Lighter; pandas still optional for notebook analysis |
 
 ---
 
@@ -339,3 +348,4 @@ BERTScore (baseline):        ____
 | 2026-06-17 | Phase 1: implemented `src/chunker.py` (3 strategies + singleton embedder + orchestrator + `__main__`) and `src/load_data.py`; smoke-tested all strategies + schema + `__main__` stats table. Full 5000-abstract run pending valid HF access. |
 | 2026-06-17 | Phase 2: implemented `src/graph_builder.py` (schema + ingest articles/chunks/entities + SEMANTIC_SIMILAR edges + `run_full_ingestion` + `__main__`), added `.env.example`; logic-tested cosine-edge + NER filter. End-to-end run pending Neo4j + SciSpaCy model + Phase 1 data. |
 | 2026-06-17 | Phase 3: implemented `src/rag_pipeline.py` (`GraphRAGPipeline`: retrieve/vector_search/graph_expand/rerank + generate/retry + run + `__main__`); logic-tested rerank/prompt/retry. Used 2 parallel research agents for conventions + current OpenAI/Neo4j/Ollama API docs. End-to-end run pending Neo4j + LLM. |
+| 2026-06-17 | Phase 4: implemented `src/evaluator.py` (recall_at_k, mrr, compute_rouge_l, compute_bert_score, evaluate_retrieval/generation, run_full_evaluation, prepare_eval_set, `__main__` stub); tested pure metrics + real rouge/bert via stub. Real eval run pending Neo4j+LLM+QA data. |
