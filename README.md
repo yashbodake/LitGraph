@@ -4,6 +4,9 @@ A Retrieval-Augmented Generation (RAG) system over 5000 PubMed abstracts that
 fuses **vector similarity search** with **Neo4j knowledge-graph traversal** for
 richer, more accurate biomedical Q&A than naive chunk-based RAG.
 
+> **Live demo:** <https://litgraph-project.streamlit.app>
+> (hosted on Streamlit Community Cloud · Neo4j Aura · Cerebras `gpt-oss-120b`)
+
 ## Architecture
 
 ```
