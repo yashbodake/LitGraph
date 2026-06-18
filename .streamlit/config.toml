@@ -2,6 +2,10 @@
 headless = true
 port = 8501
 maxUploadSize = 5
+# torch's module introspection crashes Streamlit's default LocalSourcesWatcher.
+# Disable it (the demo doesn't need hot-reload).
+fileWatcherType = "none"
+runOnSave = false
 
 [browser]
 gatherUsageStats = false

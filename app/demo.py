@@ -37,9 +37,38 @@ st.set_page_config(
 )
 st.title("GraphRAG — Scientific Literature Q&A")
 st.caption(
-    "Semantic chunking + Neo4j knowledge-graph traversal + graph-enhanced "
-    "generation over PubMed abstracts."
+    "Ask questions across 5,000 PubMed abstracts. Answers are grounded in "
+    "retrieved passages and a biomedical knowledge graph."
 )
+
+with st.expander("📖 How does this work?"):
+    st.markdown(
+        """
+**The pipeline**
+
+1. **Corpus** — 5,000 PubMed abstracts (from [PubMedQA](https://huggingface.co/datasets/qiaojin/PubMedQA)),
+   split into **6,196 semantic chunks**.
+2. **Knowledge graph** ([Neo4j](https://neo4j.com)) — **69,147** biomedical entities
+   (genes, diseases, treatments…) linked by **223,373** `MENTIONS` edges,
+   extracted with [SciSpacy](https://allenai.github.io/scispacy/) NER.
+3. **Retrieval** — hybrid **BM25 + dense vector** search fused via Reciprocal
+   Rank Fusion, then **graph-expanded** to related abstracts.
+4. **Generation** — a **Cerebras** LLM (`gpt-oss-120b`) answers using *only*
+   the retrieved context (no hallucination).
+
+Every answer lists its **source chunks** and the **knowledge-graph subgraph**
+used. Toggle the retrieval strategies in the sidebar (left).
+"""
+    )
+
+EXAMPLES = [
+    "Is microvessel density a prognostic factor in endometrial cancer?",
+    "Does breastfeeding reduce the childhood risk of asthma and obesity?",
+    "Is there a role for the GH/IGF-I axis in acromegalic cardiomyopathy?",
+    "Is p53 antibody an indicator of dedifferentiated thyroid cancer?",
+    "Are metastatic non-small-cell lung cancer patients undertreated?",
+]
+
 
 
 @st.cache_resource(show_spinner="Loading pipeline (embedder + Neo4j + LLM)...")
@@ -141,15 +170,51 @@ with st.sidebar:
         help="Number of seed chunks to retrieve per (sub-)question.",
     )
     st.divider()
-    st.markdown("**Provider:** set `CEREBRAS_API_KEY` / `OPENAI_API_KEY` in `.env`, else Ollama.")
+    st.markdown("### About this app")
+    st.markdown(
+        "**Corpus:** 5,000 PubMed abstracts (PubMedQA) → 6,196 chunks · "
+        "69,147 entities · 223,373 graph links."
+    )
+    st.markdown(
+        "**Knowledge graph:** Neo4j Aura (cloud). **LLM:** Cerebras "
+        "`gpt-oss-120b`. **Embedder:** `all-MiniLM-L6-v2`."
+    )
+    st.markdown(
+        "**Graph legend:** 🔵 blue box = text chunk · 🟡 yellow ellipse = "
+        "biomedical entity · edges = shared mentions."
+    )
+    st.markdown(
+        "Source code: [github.com/yashbodake/LitGraph]"
+        "(https://github.com/yashbodake/LitGraph)"
+    )
 
+
+# Apply a pending example-chip selection BEFORE the widget renders. (Streamlit
+# forbids assigning to a widget's session_state key after it has rendered.)
+if "_pending_query" in st.session_state:
+    st.session_state.query = st.session_state.pop("_pending_query")
 
 query = st.text_input(
     "Enter your biomedical question:",
+    key="query",
     placeholder="e.g. What is the role of TNF-alpha in rheumatoid arthritis?",
 )
 
-if st.button("Ask", type="primary") and query.strip():
+st.markdown("**Try an example:**")
+_ex_cols = st.columns(len(EXAMPLES))
+for _col, _ex in zip(_ex_cols, EXAMPLES):
+    _short = (_ex[:30] + "…") if len(_ex) > 30 else _ex
+    if _col.button(_short, help=_ex, use_container_width=True):
+        st.session_state["_pending_query"] = _ex
+        st.session_state.autorun = True
+        st.rerun()
+
+_asked = st.button("Ask", type="primary")
+if st.session_state.get("autorun"):
+    _asked = True
+    st.session_state.autorun = False
+
+if _asked and query.strip():
     try:
         pipeline = get_pipeline()
     except Exception as exc:  # noqa: BLE001
@@ -210,4 +275,8 @@ if st.button("Ask", type="primary") and query.strip():
         st.subheader("Retrieved subgraph")
         render_graph(chunks, pipeline.driver)
 else:
-    st.info("Enter a question above and press **Ask**.")
+    st.info(
+        "👆 Enter a question or click an example, then **Ask**. "
+        "You'll get a grounded answer, its source chunks, and the "
+        "knowledge-graph subgraph that informed it."
+    )
