@@ -13,6 +13,8 @@ env/
 # Secrets — never commit
 .env
 .streamlit/secrets.toml
+data/Neo4j-*.txt
+data/*.env
 
 # Generated data outputs (directory structure kept via .gitkeep)
 data/raw/*.json
