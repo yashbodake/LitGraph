@@ -71,23 +71,29 @@ def get_llm_client():
     """
     from dotenv import load_dotenv
 
+    from src.config import get_secret
+
     load_dotenv()
-    if os.getenv("CEREBRAS_API_KEY"):
+    if get_secret("CEREBRAS_API_KEY"):
         from openai import OpenAI
 
-        model = os.getenv("CEREBRAS_MODEL", ANSWER_MODEL_CEREBRAS)
+        model = get_secret("CEREBRAS_MODEL", ANSWER_MODEL_CEREBRAS)
         logger.info("Using Cerebras LLM (%s).", model)
         return "cerebras", OpenAI(
-            api_key=os.getenv("CEREBRAS_API_KEY"),
-            base_url=os.getenv("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1"),
+            api_key=get_secret("CEREBRAS_API_KEY"),
+            base_url=get_secret(
+                "CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1"
+            ),
             max_retries=0,
         )
-    if os.getenv("OPENAI_API_KEY"):
+    if get_secret("OPENAI_API_KEY"):
         from openai import OpenAI
 
         logger.info("Using OpenAI LLM (%s).", ANSWER_MODEL_OPENAI)
         # max_retries=0 so our own call_llm_with_retry owns backoff.
-        return "openai", OpenAI(api_key=os.getenv("OPENAI_API_KEY"), max_retries=0)
+        return "openai", OpenAI(
+            api_key=get_secret("OPENAI_API_KEY"), max_retries=0
+        )
     logger.info("No cloud key set; using local Ollama LLM (%s).", ANSWER_MODEL_OLLAMA)
     return "ollama", None
 

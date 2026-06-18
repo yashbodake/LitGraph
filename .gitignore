@@ -12,6 +12,7 @@ env/
 
 # Secrets — never commit
 .env
+.streamlit/secrets.toml
 
 # Generated data outputs (directory structure kept via .gitkeep)
 data/raw/*.json

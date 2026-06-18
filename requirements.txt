@@ -1,46 +1,25 @@
-# GraphRAG for Scientific Literature — Requirements
-
-# Data
-datasets>=2.14.0
-huggingface-hub>=0.20.0
-
-# Embeddings & NLP
-sentence-transformers>=2.6.0
-scispacy>=0.5.4
-# Install scispacy model separately:
-# pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz
-nltk>=3.8.1
-
-# Clustering
-hdbscan>=0.8.33
-scikit-learn>=1.3.0
-
-# Graph DB
-neo4j>=5.14.0
-
-# LLM
-openai>=1.12.0
-requests>=2.31.0   # for Ollama local
-
-# Evaluation
-rouge-score>=0.1.2
-bert-score>=0.3.13
-torch>=2.0.0
-
-# Visualisation
-matplotlib>=3.7.0
-plotly>=5.17.0
-umap-learn>=0.5.4
-pyvis>=0.3.2
-networkx>=3.1
+# Runtime dependencies for the GraphRAG demo app (app/demo.py).
+# This is the minimal set Streamlit Community Cloud installs. Build/eval-only
+# deps (scispacy, datasets, bert-score, hdbscan, umap, etc.) live in
+# requirements-dev.txt and are NOT needed to run the demo.
 
 # UI
 streamlit>=1.30.0
 
-# Data handling
-pandas>=2.0.0
-numpy>=1.24.0
+# Knowledge graph
+neo4j>=5.14.0
 
-# Utils
+# Embeddings (vector search) — pulls torch as its backend
+sentence-transformers>=2.6.0
+torch>=2.0.0
+
+# LLM client (Cerebras is OpenAI-compatible)
+openai>=1.12.0
+requests>=2.31.0
+
+# Visualisation
+pyvis>=0.3.2
+
+# Data / utils
+numpy>=1.24.0
 python-dotenv>=1.0.0
-tqdm>=4.66.0

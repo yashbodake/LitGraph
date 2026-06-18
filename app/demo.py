@@ -12,6 +12,7 @@ re-ranking. Retrieved chunks and their entities are visualised with pyvis.
 # 1. stdlib
 import logging
 import sys
+import time
 from pathlib import Path
 
 # 2. third-party
@@ -112,6 +113,17 @@ def render_graph(chunks: list[dict], driver) -> None:
 # --------------------------------------------------------------------------- #
 with st.sidebar:
     st.header("Options")
+    use_hybrid = st.checkbox(
+        "Hybrid retrieval (BM25 + dense)", value=True,
+        help="Fuse Neo4j full-text (BM25) with vector search via weighted "
+        "Reciprocal Rank Fusion. Catches queries where semantics drift from "
+        "surface terms.",
+    )
+    use_article = st.checkbox(
+        "Article-sibling expansion", value=True,
+        help="When a chunk is retrieved, surface the rest of its abstract so "
+        "the model sees full context (parent-document retrieval).",
+    )
     use_graph = st.checkbox(
         "Graph expansion", value=True,
         help="Traverse Chunk -> Entity -> Chunk to surface related abstracts.",
@@ -144,6 +156,7 @@ if st.button("Ask", type="primary") and query.strip():
         st.error(f"Failed to initialise the pipeline: {exc}")
         st.stop()
 
+    _t0 = time.time()
     try:
         with st.spinner("Retrieving context..."):
             if use_decomp:
@@ -154,8 +167,13 @@ if st.button("Ask", type="primary") and query.strip():
                 )
             else:
                 chunks = pipeline.retrieve(
-                    query, top_k=top_k, expand_graph=use_graph
+                    query,
+                    top_k=top_k,
+                    expand_graph=use_graph,
+                    hybrid=use_hybrid,
+                    expand_article=use_article,
                 )
+        t_retrieve = time.time() - _t0
 
         if not chunks:
             st.warning("No chunks retrieved. Check that Neo4j is populated.")
@@ -163,12 +181,18 @@ if st.button("Ask", type="primary") and query.strip():
 
         with st.spinner("Generating answer..."):
             answer = pipeline.generate(query, chunks)
+        t_generate = time.time() - (_t0 + t_retrieve)
     except Exception as exc:  # noqa: BLE001
         st.error(f"Pipeline error: {exc}")
         st.stop()
 
     st.subheader("Answer")
     st.write(answer)
+    st.caption(
+        f"⏱ retrieve {t_retrieve:.1f}s · generate {t_generate:.1f}s · "
+        f"total {t_retrieve + t_generate:.1f}s · "
+        f"{len(chunks)} chunks · provider: {pipeline.provider}"
+    )
 
     left, right = st.columns([3, 2])
     with left:

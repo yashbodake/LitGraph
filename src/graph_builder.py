@@ -34,16 +34,16 @@ _driver = None
 
 
 def get_driver():
-    """Return the shared Neo4j driver, created once from ``.env`` settings."""
+    """Return the shared Neo4j driver, created once from env/Streamlit secrets."""
     global _driver
     if _driver is None:
-        from dotenv import load_dotenv
         from neo4j import GraphDatabase
 
-        load_dotenv()
-        uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-        user = os.getenv("NEO4J_USER", "neo4j")
-        password = os.getenv("NEO4J_PASSWORD")
+        from src.config import get_secret
+
+        uri = get_secret("NEO4J_URI", "bolt://localhost:7687")
+        user = get_secret("NEO4J_USER", "neo4j")
+        password = get_secret("NEO4J_PASSWORD")
         _driver = GraphDatabase.driver(uri, auth=(user, password))
         logger.info("Neo4j driver created for %s", uri)
     return _driver
