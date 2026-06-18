@@ -113,11 +113,16 @@ def setup_schema(driver) -> None:
             }
           }
         """,
+        # BM25 full-text index for hybrid retrieval (Reciprocal Rank Fusion).
+        """
+        CREATE FULLTEXT INDEX chunk_fulltext IF NOT EXISTS
+          FOR (c:Chunk) ON EACH [c.text]
+        """,
     ]
     with driver.session() as session:
         for cypher in statements:
             _run_cypher(session, cypher)
-    logger.info("Schema (constraints + vector index) ready.")
+    logger.info("Schema (constraints + vector + fulltext indexes) ready.")
 
 
 # --------------------------------------------------------------------------- #

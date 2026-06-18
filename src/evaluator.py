@@ -96,22 +96,32 @@ def compute_bert_score(predictions: list[str], references: list[str]) -> dict:
 def prepare_eval_set(
     article_ids, sample_size: int = DEFAULT_SAMPLE_SIZE, seed: int = DEFAULT_SEED
 ) -> list[dict]:
-    """Filter pubmed_qa ``pqa_labeled`` to ``article_ids`` and sample up to N."""
+    """Build a QA eval set from the PubMedQA rows matching ``article_ids``.
+
+    Our corpus is sampled from ``qiaojin/PubMedQA`` (``pqa_unlabeled``), where
+    every abstract ships with a question + long answer. The labelled split
+    (``pqa_labeled``) shares no PMIDs with the unlabeled split, so we evaluate
+    on questions from the same source as our ingested articles — guaranteeing
+    each question's gold article exists in the graph.
+    """
     from datasets import load_dataset
 
     valid = {str(a) for a in article_ids}
-    qa_ds = load_dataset("pubmed_qa", "pqa_labeled", split="train")
+    qa_ds = load_dataset(
+        "qiaojin/PubMedQA", "pqa_unlabeled", split="train",
+        token=os.getenv("HF_TOKEN") or None,
+    )
     filtered = [
         {
-            "pubmed_id": str(row["pubmed_id"]),
+            "pubmed_id": str(row["pubid"]),
             "question": row["question"],
             "long_answer": row["long_answer"],
-            "final_decision": row["final_decision"],
+            "final_decision": "",
         }
         for row in qa_ds
-        if str(row["pubmed_id"]) in valid
+        if str(row["pubid"]) in valid
     ]
-    logger.info("pubmed_qa matched %d / %d pairs.", len(filtered), len(qa_ds))
+    logger.info("PubMedQA matched %d / %d pairs.", len(filtered), len(qa_ds))
     random.seed(seed)
     return random.sample(filtered, min(sample_size, len(filtered)))
 
